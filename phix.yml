@@ -1,0 +1,60 @@
+---
+- hosts: test-a
+  vars:
+    user: ubuntu
+    version: v0.1
+
+  tasks:
+    - name: Check if repo is cloned already
+      action: shell test -d /home/${user}/repos/PHIX && echo "exist" || echo "nope"
+      register: repo_exists
+
+    - name: Clone repo with PHIX code
+      action: git repo=git@github.com:amida-tech/PHIX.git dest=/home/${user}/repos/PHIX
+      when_string: ${repo_exists.stdout} != "nope"
+
+    - name: Pull latest version of repo
+      action: command git pull chdir=/home/${user}/repos/PHIX
+      when_string: ${repo_exists.stdout} != "exist"
+
+
+    - name: Remove phix code
+      action: command rm -r /usr/share/nginx/www/PHIX/ removes=/usr/share/nginx/www/PHIX/
+      sudo: yes
+
+    - name: Deploy phix code
+      action: command cp -r PHIX/ /usr/share/nginx/www/ chdir=/home/${user}/repos
+      sudo: yes
+      notify:
+        - restart phix
+
+    - name: Update phix app configuration
+      template: src=files/phix.conf dest=/etc/init/phix.conf
+      sudo: yes
+      notify:
+        - restart phix
+
+    - name: Update phix app configuration
+      template: src=files/watcher-phix.conf dest=/etc/init/watcher-phix.conf
+      sudo: yes
+      notify:
+        - restart watcher-phix
+
+    - name: Update NGINX configuration
+      template: src=nginx1.conf dest=/etc/nginx/sites-available
+      sudo: yes
+      notify:
+        - restart nginx
+
+  handlers:
+    - name: restart nginx
+      service:  name=nginx state=restarted
+      sudo: yes
+
+    - name: restart phix
+      service:  name=phix state=restarted
+      sudo: yes
+
+    - name: restart watcher-phix
+      service:  name=watcher-phix state=restarted
+      sudo: yes

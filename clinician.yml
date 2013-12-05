@@ -1,0 +1,60 @@
+---
+- hosts: test-b
+  vars:
+    user: ubuntu
+    version: v0.1
+
+  tasks:
+    - name: Check if repo is cloned already
+      action: shell test -d /home/${user}/repos/PHIX && echo "exist" || echo "nope"
+      register: repo_exists
+
+    - name: Clone repo with PHIX code
+      action: git repo=git@github.com:amida-tech/PHIX.git dest=/home/${user}/repos/PHIX
+      when_string: ${repo_exists.stdout} != "nope"
+
+    - name: Pull latest version of repo
+      action: command git pull chdir=/home/${user}/repos/PHIX
+      when_string: ${repo_exists.stdout} != "exist"
+
+
+    - name: Remove clinician code
+      action: command rm -r /usr/share/nginx/www/PHIX/ removes=/usr/share/nginx/www/PHIX/
+      sudo: yes
+
+    - name: Deploy clinician code
+      action: command cp -r PHIX/ /usr/share/nginx/www/ chdir=/home/${user}/repos
+      sudo: yes
+      notify:
+        - restart clinician
+
+    - name: Update clinician app configuration
+      template: src=files/clinician.conf dest=/etc/init/clinician.conf
+      sudo: yes
+      notify:
+        - restart clinician
+
+    - name: Update clinician app configuration
+      template: src=files/watcher-clinician.conf dest=/etc/init/watcher-clinician.conf
+      sudo: yes
+      notify:
+        - restart watcher-clinician
+
+    - name: Update NGINX configuration
+      template: src=nginx2.conf dest=/etc/nginx/sites-available
+      sudo: yes
+      notify:
+        - restart nginx
+
+  handlers:
+    - name: restart nginx
+      service:  name=nginx state=restarted
+      sudo: yes
+
+    - name: restart clinician
+      service:  name=clinician state=restarted
+      sudo: yes
+
+    - name: restart watcher-clinician
+      service:  name=watcher-clinician state=restarted
+      sudo: yes

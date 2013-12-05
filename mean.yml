@@ -1,0 +1,97 @@
+---
+- hosts: direct
+  vars:
+    user: ubuntu
+    version: v0.1
+
+  tasks:
+
+    - name: Install Git
+      action: apt pkg=git-core state=latest update_cache=yes
+      sudo: true
+
+    - name: Install nginx
+      action: apt pkg=nginx state=latest
+      sudo: true
+      notify: restart nginx
+
+    - name: Copy mongo install script
+      template: src=files/mongo_install.bash dest=/home/${user}/
+      sudo: yes
+
+    - name: Run mongo install script
+      shell: bash ./mongo_install.bash chdir=/home/${user}/
+      sudo: yes
+      notify:
+        - restart mongodb
+
+    - name: Install packages required for Node.js
+      action: apt pkg={{ item }} state=latest
+      with_items:
+        - build-essential
+        - curl
+      sudo: yes
+
+
+    - name: Set environment
+      shell: echo 'export PATH=$HOME/local/bin:$PATH' >> /home/${user}/.bashrc chdir=/home/${user}/
+      sudo: yes
+
+
+    #- name: Set environment 2
+    #  shell: . /home/${user}/.bashrc chdir=/home/${user}/
+    #  sudo: yes
+
+
+    - name: Setup folders
+      shell: mkdir local chdir=/home/${user}/
+      sudo: yes
+
+    - name: Setup folders
+      shell: mkdir node-latest-install chdir=/home/${user}/
+      sudo: yes
+
+    - name: Get copy of Node.js
+      shell: curl http://nodejs.org/dist/node-latest.tar.gz | tar xz --strip-components=1 chdir=/home/${user}/node-latest-install
+      sudo: yes
+
+
+
+
+    - name: Configure copy of Node.js
+      shell: ./configure --prefix=/home/${user}/local chdir=/home/${user}/node-latest-install
+      sudo: yes
+
+    - name: Make Node.js
+      shell: make install chdir=/home/${user}/node-latest-install
+      sudo: yes
+
+
+
+    - name: Get copy of NPM
+      shell: curl https://npmjs.org/install.sh > npm-install.sh chdir=/home/${user}/node-latest-install
+      sudo: yes
+
+
+    #// need to set PATH properly to point to /home/ubuntu/bin/local or load .bashrc correctly
+    #- name: Update PATH
+    #  raw: source .bashrc  chdir=/home/${user}/
+    #  sudo: yes
+
+
+    #sudo env PATH=$PATHsh ./npm-install.sh
+    #- name: Install NPM
+    #  command: env PATH=$PATH sh ./npm-install.sh chdir=/home/${user}/node-latest-install
+    #  sudo: yes
+
+    #- name: Install npm package for Express.js globally
+    #  npm: name=express global=yes
+
+  handlers:
+    - name: restart nginx
+      service:  name=nginx state=restarted
+      sudo: yes
+
+    - name: restart mongodb
+      service:  name=mongodb state=restarted
+      sudo: yes
